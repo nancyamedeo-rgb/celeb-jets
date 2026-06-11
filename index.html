@@ -175,6 +175,47 @@ header h1 span { color: var(--muted); font-weight: 400; }
 .popup-name { font-size: 13px; font-weight: 600; color: var(--gold); margin-bottom: 4px; }
 .popup-row  { color: var(--muted); margin-top: 2px; line-height: 1.5; }
 .popup-row span { color: var(--text); }
+
+/* ── Celebrity composite map markers ── */
+.celeb-marker {
+  display: flex; flex-direction: column; align-items: center;
+  pointer-events: none; position: relative;
+}
+.celeb-plane-svg {
+  pointer-events: all; cursor: pointer;
+  filter: drop-shadow(0 0 5px #d4af37) drop-shadow(0 0 2px #000);
+}
+.celeb-photo {
+  width: 36px; height: 36px; border-radius: 50%;
+  border: 2px solid #d4af37;
+  box-shadow: 0 0 8px rgba(212,175,55,0.65), 0 2px 8px rgba(0,0,0,0.9);
+  object-fit: cover; object-position: top;
+  background: #1a1408; display: block;
+  pointer-events: all; cursor: pointer;
+}
+.celeb-photo-fallback {
+  width: 36px; height: 36px; border-radius: 50%;
+  border: 2px solid #d4af37;
+  box-shadow: 0 0 8px rgba(212,175,55,0.65), 0 2px 8px rgba(0,0,0,0.9);
+  background: #1a1408; display: flex; align-items: center;
+  justify-content: center; font-size: 19px; line-height: 1;
+  pointer-events: all; cursor: pointer;
+}
+.celeb-name-label {
+  margin-top: 2px;
+  background: rgba(0,0,0,0.75);
+  border: 1px solid rgba(212,175,55,0.35);
+  border-radius: 3px; padding: 1px 5px;
+  font-family: 'DM Mono', monospace; font-size: 9px; font-weight: 500;
+  color: #f0d060; white-space: nowrap; letter-spacing: 0.02em;
+  pointer-events: none; backdrop-filter: blur(3px);
+  text-shadow: 0 1px 3px rgba(0,0,0,1);
+}
+.celeb-alt-label {
+  font-family: 'DM Mono', monospace; font-size: 8px;
+  color: rgba(212,175,55,0.65); margin-top: 1px;
+  pointer-events: none; text-shadow: 0 1px 3px rgba(0,0,0,1);
+}
 </style>
 </head>
 <body>
@@ -315,7 +356,87 @@ function initMap() {
   planeLayer = L.layerGroup().addTo(map);
 }
 
-// ── Plane icon ────────────────────────────────────────────────────────────────
+// ── Wikipedia photo cache ─────────────────────────────────────────────────────
+// Keyed by celeb.hex → image URL (or null if not found)
+const photoCache = {};
+
+// Wikipedia REST API: /page/summary/{title} returns a thumbnail URL
+// We derive the article title from the celeb name, handling common edge cases
+function wikiTitle(name) {
+  // Strip parenthetical suffixes like "(2)", "(G5)", "(PC-24)"
+  return name.replace(/\s*\([^)]*\)\s*$/, '').trim().replace(/ /g, '_');
+}
+
+async function fetchPhoto(celeb) {
+  if (photoCache[celeb.hex] !== undefined) return photoCache[celeb.hex];
+  photoCache[celeb.hex] = null; // mark as in-flight
+
+  try {
+    const title = wikiTitle(celeb.name);
+    const url   = `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`;
+    const res   = await fetch(url, { headers: { 'Accept': 'application/json' } });
+    if (!res.ok) { photoCache[celeb.hex] = null; return null; }
+    const data  = await res.json();
+    const thumb = data.thumbnail?.source || data.originalimage?.source || null;
+    // Upscale Wikipedia thumbnails for crisp display
+    const sized = thumb ? thumb.replace(/\/\d+px-/, '/80px-') : null;
+    photoCache[celeb.hex] = sized;
+    return sized;
+  } catch(e) {
+    photoCache[celeb.hex] = null;
+    return null;
+  }
+}
+
+// Pre-fetch photos for all celebs quietly in the background
+async function prefetchPhotos() {
+  // Stagger requests so we don't hammer Wikipedia
+  for (const celeb of CELEB_LIST) {
+    fetchPhoto(celeb);
+    await new Promise(r => setTimeout(r, 80));
+  }
+}
+
+// ── Composite celebrity icon ──────────────────────────────────────────────────
+// Builds a divIcon with: rotating SVG plane above + circular headshot + name label
+function buildCelebIcon(celeb, track, altFt) {
+  const planeSize = altFt > 35000 ? 20 : altFt > 20000 ? 17 : 14;
+  const photoUrl  = photoCache[celeb.hex];
+  const firstName = celeb.name.replace(/\s*\([^)]*\)$/, '').split(' ')[0];
+  const altStr    = altFt >= 1000 ? (altFt/1000).toFixed(0)+'K ft' : altFt + ' ft';
+
+  const planeSvg = `<svg class="celeb-plane-svg" xmlns="http://www.w3.org/2000/svg"
+    width="${planeSize}" height="${planeSize}" viewBox="0 0 24 24"
+    style="transform:rotate(${track||0}deg);transform-origin:center;margin-bottom:3px">
+    <path d="M12 2 L8 10 L2 10 L2 12 L8 12 L7 18 L5 19 L5 21 L12 19 L19 21 L19 19 L17 18 L16 12 L22 12 L22 10 L16 10 Z"
+      fill="#d4af37" stroke="rgba(0,0,0,0.6)" stroke-width="0.8"/>
+  </svg>`;
+
+  const photoEl = photoUrl
+    ? `<img class="celeb-photo" src="${photoUrl}" alt="${celeb.name}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
+      + `<div class="celeb-photo-fallback" style="display:none">${celeb.icon}</div>`
+    : `<div class="celeb-photo-fallback">${celeb.icon}</div>`;
+
+  const html = `<div class="celeb-marker">
+    ${planeSvg}
+    ${photoEl}
+    <div class="celeb-name-label">${firstName}</div>
+    <div class="celeb-alt-label">${altStr}</div>
+  </div>`;
+
+  // Total height: plane + photo + name + alt
+  const totalH = planeSize + 4 + 36 + 14 + 12;
+  const totalW = 80; // wide enough for name label
+
+  return L.divIcon({
+    className: '',
+    html,
+    iconSize:   [totalW, totalH],
+    iconAnchor: [totalW / 2, planeSize + 4 + 18], // anchor at center of photo
+  });
+}
+
+// ── Plane icon (plain fallback, used during photo load) ───────────────────────
 function planeIcon(track, altFt) {
   const size = altFt > 35000 ? 22 : altFt > 20000 ? 19 : 16;
   const svg  = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24"
@@ -342,7 +463,7 @@ function renderMap() {
     const vrate  = a.baro_rate || 0;
 
     const marker = L.marker([a.lat, a.lon], {
-      icon: planeIcon(track, altFt),
+      icon: buildCelebIcon(celeb, track, altFt),
       zIndexOffset: altFt,
     });
 
@@ -422,8 +543,13 @@ function renderList() {
       ? '<span style="color:var(--muted)">—</span>'
       : `<span style="color:var(--gold)">${altFt >= 1000 ? (altFt/1000).toFixed(1)+'K' : altFt + "'"}</span>`;
 
+    const photoUrl = photoCache[celeb.hex];
+    const avatarEl = photoUrl
+      ? `<img src="${photoUrl}" style="width:32px;height:32px;border-radius:50%;border:1.5px solid var(--gold);object-fit:cover;object-position:top;flex-shrink:0" onerror="this.style.display='none'">`
+      : `<div style="width:32px;height:32px;border-radius:50%;border:1.5px solid var(--border);background:rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">${celeb.icon}</div>`;
+
     return `<div class="jet-card ${onGround ? 'grounded' : 'airborne'}" onclick="zoomTo('${celeb.hex}')">
-      <div class="jc-icon">${celeb.icon}</div>
+      ${avatarEl}
       <div class="jc-body">
         <div class="jc-name">${esc(celeb.name)}</div>
         <div class="jc-sub">${esc(sub)}</div>
@@ -522,6 +648,15 @@ tickClock();
 initMap();
 loadData();
 setInterval(loadData, 30 * 1000);
+
+// Start fetching Wikipedia headshots in the background.
+// Re-render after ~6s when most photos have loaded, and again at ~15s for stragglers.
+prefetchPhotos().then(() => {
+  renderMap();
+  renderList();
+});
+setTimeout(() => { renderMap(); renderList(); }, 6000);
+setTimeout(() => { renderMap(); renderList(); }, 15000);
 </script>
 </body>
 </html>
