@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Celebrity Jet Tracker — Live</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap');
+
+:root {
+  --surface:    rgba(0,0,0,0.52);
+  --surface-lt: rgba(0,0,0,0.32);
+  --border:     rgba(255,255,255,0.10);
+  --border-gld: rgba(212,175,55,0.28);
+  --text:       #f0ece4;
+  --muted:      #9a9080;
+  --gold:       #d4af37;
+  --gold2:      #f0d060;
+  --green:      #34d399;
+  --blue:       #60a5fa;
+  --purple:     #c084fc;
+  --font-ui:    'DM Mono', 'Courier New', monospace;
+  --font-body:  'Inter', system-ui, sans-serif;
+  --radius:     6px;
+  --sidebar:    320px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: transparent;
+  color: var(--text);
+  font-family: var(--font-body);
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 9px 16px; background: var(--surface);
+  border-bottom: 1px solid var(--border-gld); flex-shrink: 0; gap: 12px;
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+}
+.header-left { display: flex; align-items: center; gap: 12px; }
+.jet-badge {
+  background: var(--gold); color: #000; font-family: var(--font-ui);
+  font-size: 11px; font-weight: 500; letter-spacing: 0.08em;
+  padding: 3px 8px; border-radius: 3px; text-transform: uppercase;
+}
+header h1 { font-size: 14px; font-weight: 600; letter-spacing: 0.01em; }
+header h1 span { color: var(--muted); font-weight: 400; }
+.clock { font-family: var(--font-ui); font-size: 11px; color: var(--muted); text-align: right; line-height: 1.5; }
+.clock .time { font-size: 16px; color: var(--text); font-weight: 500; display: block; letter-spacing: 0.05em; }
+
+.stat-bar {
+  display: flex; background: var(--surface-lt);
+  border-bottom: 1px solid var(--border-gld); flex-shrink: 0;
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+}
+.stat-cell { flex: 1; text-align: center; padding: 7px 6px; border-right: 1px solid var(--border); }
+.stat-cell:last-child { border-right: none; }
+.stat-num { font-family: var(--font-ui); font-size: 19px; font-weight: 500; line-height: 1; letter-spacing: -0.02em; }
+.stat-label { font-family: var(--font-ui); font-size: 8px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-top: 2px; }
+.col-gold   { color: var(--gold); }
+.col-gold2  { color: var(--gold2); }
+.col-green  { color: var(--green); }
+.col-blue   { color: var(--blue); }
+.col-purple { color: var(--purple); }
+
+.main { display: flex; flex: 1; overflow: hidden; }
+
+.map-wrap { flex: 1; position: relative; overflow: hidden; }
+#map { width: 100%; height: 100%; }
+.leaflet-tile { filter: brightness(0.28) saturate(0.3) hue-rotate(230deg); }
+
+.map-label {
+  position: absolute; bottom: 10px; left: 10px; z-index: 1000;
+  background: rgba(0,0,0,0.65); border: 1px solid var(--border);
+  border-radius: var(--radius); font-family: var(--font-ui);
+  font-size: 9px; letter-spacing: 0.07em; text-transform: uppercase;
+  color: var(--muted); padding: 4px 8px; pointer-events: none;
+}
+
+.sidebar {
+  width: var(--sidebar); flex-shrink: 0; background: var(--surface);
+  border-left: 1px solid var(--border-gld); display: flex;
+  flex-direction: column; overflow: hidden;
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+}
+.sidebar-header {
+  padding: 10px 14px 8px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
+}
+.sidebar-title { font-family: var(--font-ui); font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.refresh-btn {
+  background: none; border: 1px solid var(--border); border-radius: var(--radius);
+  color: var(--muted); cursor: pointer; font-size: 10px; font-family: var(--font-ui);
+  padding: 3px 8px; transition: border-color 0.15s, color 0.15s;
+}
+.refresh-btn:hover { border-color: var(--gold); color: var(--gold); }
+.refresh-btn.spinning { animation: spin 0.7s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.search-wrap { padding: 8px 12px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.search-wrap input {
+  width: 100%; background: rgba(0,0,0,0.3); border: 1px solid var(--border);
+  border-radius: 4px; color: var(--text); font-size: 11px; padding: 5px 9px;
+  font-family: var(--font-body); outline: none; transition: border-color 0.15s;
+}
+.search-wrap input:focus { border-color: var(--gold); }
+.search-wrap input::placeholder { color: var(--muted); }
+
+.tabs { display: flex; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.tab {
+  flex: 1; padding: 7px 4px; font-size: 9px; font-family: var(--font-ui);
+  text-align: center; cursor: pointer; color: var(--muted);
+  border-bottom: 2px solid transparent; transition: color 0.15s;
+  letter-spacing: 0.05em; text-transform: uppercase; user-select: none;
+}
+.tab:hover { color: var(--text); }
+.tab.active { color: var(--gold); border-bottom-color: var(--gold); }
+
+.jet-wrap { flex: 1; overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgba(212,175,55,0.15) transparent; }
+.jet-wrap::-webkit-scrollbar { width: 3px; }
+.jet-wrap::-webkit-scrollbar-thumb { background: rgba(212,175,55,0.2); border-radius: 2px; }
+
+.loading-state, .empty-state { padding: 24px 16px; text-align: center; font-size: 11px; color: var(--muted); line-height: 1.7; }
+.spinner { width: 18px; height: 18px; border: 2px solid rgba(212,175,55,0.12); border-top-color: var(--gold); border-radius: 50%; margin: 0 auto 12px; animation: spin 0.9s linear infinite; }
+
+.jet-card {
+  padding: 9px 12px; border-bottom: 1px solid var(--border);
+  transition: background 0.1s; cursor: pointer;
+  display: flex; align-items: center; gap: 9px;
+}
+.jet-card:hover { background: rgba(212,175,55,0.07); }
+.jet-card.airborne { border-left: 2px solid var(--gold); padding-left: 10px; }
+.jet-card.grounded { border-left: 2px solid rgba(255,255,255,0.06); padding-left: 10px; opacity: 0.6; }
+
+.jc-icon { font-size: 17px; flex-shrink: 0; line-height: 1; width: 22px; text-align: center; }
+.jc-body { flex: 1; min-width: 0; }
+.jc-name { font-size: 11px; font-weight: 600; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.jc-sub  { font-size: 9px; color: var(--muted); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.jc-right { text-align: right; flex-shrink: 0; }
+.jc-alt { font-family: var(--font-ui); font-size: 11px; font-weight: 500; }
+.jc-reg { font-family: var(--font-ui); font-size: 9px; color: var(--muted); margin-top: 1px; }
+
+.badge {
+  display: inline-block; font-family: var(--font-ui); font-size: 8px;
+  letter-spacing: 0.05em; text-transform: uppercase; padding: 1px 5px;
+  border-radius: 2px; margin-top: 2px;
+}
+.badge-air    { background: rgba(212,175,55,0.18); color: var(--gold); }
+.badge-ground { background: rgba(255,255,255,0.05); color: var(--muted); }
+
+.status-bar {
+  padding: 5px 13px; border-top: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+  font-family: var(--font-ui); font-size: 9px; color: var(--muted); flex-shrink: 0;
+}
+.status-dot { width: 5px; height: 5px; border-radius: 50%; display: inline-block; margin-right: 5px; background: var(--muted); }
+.status-dot.live { background: var(--green); animation: pulse 2.5s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+.src-tag { font-family: var(--font-ui); font-size: 8px; color: var(--muted); background: rgba(255,255,255,0.05); border-radius: 10px; padding: 1px 7px; }
+
+.leaflet-popup-content-wrapper {
+  background: rgba(10,8,3,0.94) !important; border: 1px solid var(--border-gld) !important;
+  border-radius: 6px !important; color: var(--text) !important;
+  font-family: var(--font-body) !important; font-size: 11px !important;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.6) !important;
+}
+.leaflet-popup-tip { background: rgba(10,8,3,0.94) !important; }
+.leaflet-popup-close-button { color: var(--muted) !important; }
+.popup-name { font-size: 13px; font-weight: 600; color: var(--gold); margin-bottom: 4px; }
+.popup-row  { color: var(--muted); margin-top: 2px; line-height: 1.5; }
+.popup-row span { color: var(--text); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <span class="jet-badge">✈ Private</span>
+    <h1>Celebrity Jet Tracker <span>/ Live ADS-B</span></h1>
+  </div>
+  <div class="clock">
+    <span class="time" id="clock-time">--:--:--</span>
+    <span id="clock-date"></span>
+  </div>
+</header>
+
+<div class="stat-bar">
+  <div class="stat-cell"><div class="stat-num col-gold"   id="stat-airborne">–</div><div class="stat-label">In The Air</div></div>
+  <div class="stat-cell"><div class="stat-num col-gold2"  id="stat-tracked">–</div><div class="stat-label">Tracked</div></div>
+  <div class="stat-cell"><div class="stat-num col-green"  id="stat-visible">–</div><div class="stat-label">ADS-B Live</div></div>
+  <div class="stat-cell"><div class="stat-num col-blue"   id="stat-maxalt">–</div><div class="stat-label">Highest (ft)</div></div>
+  <div class="stat-cell"><div class="stat-num col-purple" id="stat-fastest">–</div><div class="stat-label">Fastest (kts)</div></div>
+</div>
+
+<div class="main">
+  <div class="map-wrap">
+    <div id="map"></div>
+    <div class="map-label">airplanes.live ADS-B · Celebrity Jets Worldwide</div>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <span class="sidebar-title">Celebrity Roster</span>
+      <button class="refresh-btn" id="refresh-btn" onclick="loadData()">↻ Refresh</button>
+    </div>
+    <div class="search-wrap">
+      <input id="search-input" type="text" placeholder="Search celebrities…" oninput="renderList()">
+    </div>
+    <div class="tabs">
+      <div class="tab active" data-tab="all"      onclick="setTab('all')">All</div>
+      <div class="tab"        data-tab="airborne" onclick="setTab('airborne')">In Air</div>
+      <div class="tab"        data-tab="ground"   onclick="setTab('ground')">Grounded</div>
+    </div>
+    <div class="jet-wrap" id="jet-wrap">
+      <div class="loading-state"><div class="spinner"></div>Tracking jets…</div>
+    </div>
+    <div class="status-bar">
+      <div><span class="status-dot" id="status-dot"></span><span id="status-text">Connecting…</span></div>
+      <span class="src-tag">airplanes.live</span>
+    </div>
+  </aside>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+// ── Celebrity jet registry ────────────────────────────────────────────────────
+// ICAO hex codes from public ADS-B tracking databases (CelebPlanes, CelebrityPrivateJetTracker,
+// ADS-B Exchange public celebrity lists). All transponder data is publicly broadcast.
+const CELEBS = [
+  { hex: 'a2ae0a', name: 'Taylor Swift',        icon: '🎤', type: 'Dassault Falcon 7X',    reg: 'N898TS'  },
+  { hex: 'a21fe6', name: 'Drake',                icon: '🎤', type: 'Boeing 767 Air Drake',  reg: 'C-FNOG'  },
+  { hex: 'a5bf2c', name: 'Jay-Z',                icon: '🎤', type: 'Bombardier Challenger',  reg: 'N886JZ'  },
+  { hex: 'aa3410', name: 'Donald Trump',          icon: '🏛️', type: 'Boeing 757',             reg: 'N757AF'  },
+  { hex: 'a89621', name: 'Kim Kardashian',        icon: '⭐', type: 'Gulfstream G650',        reg: 'N1980K'  },
+  { hex: 'a18845', name: 'Kim Kardashian (2)',    icon: '⭐', type: 'Gulfstream IV',           reg: 'N1980K'  },
+  { hex: 'a6d9e0', name: 'Mark Zuckerberg',      icon: '💻', type: 'Gulfstream G700',         reg: 'N525ZK'  },
+  { hex: 'ac145b', name: 'Elon Musk',             icon: '🚀', type: 'Gulfstream G650ER',      reg: 'N628TS'  },
+  { hex: 'ab2404', name: 'Elon Musk (G5)',        icon: '🚀', type: 'Gulfstream G5',           reg: 'N300BY'  },
+  { hex: 'a0f9e7', name: 'Jeff Bezos',            icon: '📦', type: 'Gulfstream G650ER',      reg: 'N272EX'  },
+  { hex: 'a17855', name: 'Jeff Bezos (PC-24)',    icon: '📦', type: 'Pilatus PC-24',           reg: 'N194PJ'  },
+  { hex: 'a35206', name: 'Bill Gates',             icon: '💻', type: 'Bombardier BD-700',      reg: 'N887WM'  },
+  { hex: 'ac6343', name: 'Oprah Winfrey',          icon: '⭐', type: 'Gulfstream G650',        reg: 'N540W'   },
+  { hex: 'a0046f', name: 'Larry Ellison',          icon: '💻', type: 'Gulfstream G650ER',      reg: 'N787LE'  },
+  { hex: 'ab28c5', name: 'Eric Schmidt',           icon: '💻', type: 'Gulfstream G650',        reg: 'N651HS'  },
+  { hex: 'a4a848', name: 'Floyd Mayweather',       icon: '🥊', type: 'Gulfstream IV',           reg: 'N909FM'  },
+  { hex: 'a4533a', name: 'Kylie Jenner',           icon: '⭐', type: 'Bombardier Challenger',   reg: 'N810KJ'  },
+  { hex: 'a000e8', name: 'Travis Scott',           icon: '🎤', type: 'Dassault Falcon 900',    reg: 'N940TS'  },
+  { hex: 'a6503c', name: 'Steven Spielberg',       icon: '🎬', type: 'Gulfstream G650',        reg: 'N831SS'  },
+  { hex: 'a7135e', name: 'Kenny Chesney',          icon: '🎤', type: 'Cessna Citation X',      reg: 'N56KC'   },
+  { hex: 'a0998a', name: 'Blake Shelton',          icon: '🎤', type: 'Gulfstream IV',           reg: 'N104BS'  },
+  { hex: 'ad5b90', name: 'Alex Rodriguez',         icon: '⚾', type: 'Gulfstream G550',         reg: 'N377AR'  },
+  { hex: 'a3e6f0', name: 'Jerry Jones',            icon: '🏈', type: 'Boeing BBJ',              reg: 'N1JJ'    },
+  { hex: 'a00050', name: 'David Geffen',           icon: '🎬', type: 'Gulfstream G650',         reg: 'N83DG'   },
+  { hex: 'a88d6a', name: 'Richard Branson',        icon: '🚀', type: 'Bombardier Global 6000',  reg: 'VP-VRB'  },
+  { hex: 'a1e50a', name: 'Mark Cuban',             icon: '🏀', type: 'Gulfstream V',            reg: 'N336MK'  },
+  { hex: 'ac1d80', name: 'Steve Wynn',             icon: '🎰', type: 'Gulfstream V',            reg: 'N88WR'   },
+  { hex: 'a55b7f', name: 'Tiger Woods',            icon: '⛳', type: 'Gulfstream G550',         reg: 'N517TW'  },
+  { hex: 'a0aefd', name: 'Warren Buffett',         icon: '💰', type: 'Gulfstream IV',           reg: 'N272W'   },
+  { hex: 'a67d2e', name: 'Diddy',                  icon: '🎤', type: 'Gulfstream G550',         reg: 'N183AP'  },
+  { hex: 'a97aa5', name: 'Michael Jordan',         icon: '🏀', type: 'Gulfstream G550',         reg: 'N236MJ'  },
+  { hex: 'a97659', name: 'LeBron James',           icon: '🏀', type: 'Bombardier Challenger',   reg: 'N621LJ'  },
+  { hex: 'aa5bc4', name: 'Cristiano Ronaldo',      icon: '⚽', type: 'Gulfstream G650',         reg: 'CS-DKM'  },
+  { hex: 'ab772b', name: 'Roger Federer',          icon: '🎾', type: 'Gulfstream G550',         reg: 'HB-JKB'  },
+  { hex: 'ac701e', name: 'Phil Mickelson',         icon: '⛳', type: 'Gulfstream IV',           reg: 'N711PM'  },
+  { hex: 'a36d13', name: 'Elton John',             icon: '🎹', type: 'Gulfstream IV',           reg: 'N452EJ'  },
+  { hex: 'ab0a46', name: 'Bob Iger',               icon: '🎬', type: 'Gulfstream G650',         reg: 'N217BI'  },
+  { hex: 'a21084', name: 'Marc Andreessen',        icon: '💻', type: 'Gulfstream G650',         reg: 'N219MA'  },
+  { hex: 'acc306', name: 'DJ Khaled',              icon: '🎤', type: 'Gulfstream G550',         reg: 'N550KH'  },
+  { hex: 'a9247d', name: 'Carlos Slim',            icon: '💰', type: 'Boeing BBJ',              reg: 'XA-MAX'  },
+  { hex: 'a950c0', name: 'Brad Garlinghouse',      icon: '💻', type: 'Gulfstream IV',           reg: 'N950BG'  },
+  { hex: 'a63665', name: 'David Sacks',            icon: '💻', type: 'Gulfstream G550',         reg: 'N663DS'  },
+  { hex: 'ac643b', name: 'Howard Lutnick',         icon: '💰', type: 'Gulfstream G700',         reg: 'N643CG'  },
+  { hex: 'a835af', name: 'Lionel Messi',           icon: '⚽', type: 'Gulfstream G550',         reg: 'LV-FYF'  },
+  { hex: 'a0cf7a', name: 'Aliko Dangote',          icon: '💰', type: 'Bombardier Global 7500',  reg: '5N-ADG'  },
+  { hex: 'a1820b', name: 'Kris Jenner',            icon: '⭐', type: 'Bombardier Challenger',   reg: 'N182KJ'  },
+  { hex: 'ac39d6', name: 'Tom Brady',              icon: '🏈', type: 'Gulfstream G550',         reg: 'N199PB'  },
+  { hex: 'a95892', name: 'Patrick Mahomes',        icon: '🏈', type: 'Cessna Citation X',       reg: 'N15PM'   },
+  { hex: 'a81b13', name: 'Larry Page',             icon: '💻', type: 'Boeing BBJ2',             reg: 'N88888'  },
+  { hex: 'a17907', name: 'Sergey Brin',            icon: '💻', type: 'Gulfstream G650',         reg: 'N790SB'  },
+  { hex: 'a55b0c', name: 'Reed Hastings',          icon: '📺', type: 'Gulfstream G650',         reg: 'N550RH'  },
+  { hex: 'aa3908', name: 'Rupert Murdoch',         icon: '📰', type: 'Gulfstream G650',         reg: 'N355RM'  },
+  { hex: '43ea4a', name: 'Roman Abramovich',       icon: '⚽', type: 'Boeing BBJ',              reg: 'P4-MES'  },
+  { hex: 'a103ca', name: 'Joe Rogan',              icon: '🎙️', type: 'Gulfstream G550',         reg: 'N103JR'  },
+  { hex: 'a0ff25', name: 'Dwyane Wade',            icon: '🏀', type: 'Cessna Citation X',       reg: 'N33DW'   },
+  { hex: 'ad35ee', name: 'Peter Thiel',            icon: '💻', type: 'Gulfstream G650',         reg: 'N35PT'   },
+  { hex: 'a87a8f', name: 'Marc Benioff',           icon: '💻', type: 'Gulfstream G650ER',       reg: 'N87SF'   },
+  { hex: '486201', name: 'Bernie Ecclestone',      icon: '🏎️', type: 'Gulfstream G650',         reg: 'G-CIVP'  },
+  { hex: 'a988ec', name: 'Jeff Immelt',            icon: '💼', type: 'Gulfstream IV',           reg: 'N988JB'  },
+  { hex: 'ad540a', name: 'Andrey Melnichenko',     icon: '💰', type: 'Airbus ACJ319',           reg: 'M-SCHI'  },
+];
+
+// De-duplicate by hex, build lookup
+const CELEB_MAP = {};
+CELEBS.forEach(c => { if (!CELEB_MAP[c.hex]) CELEB_MAP[c.hex] = c; });
+const CELEB_LIST = Object.values(CELEB_MAP);
+const ALL_HEX    = CELEB_LIST.map(c => c.hex);
+
+let liveData  = {};
+let activeTab = 'all';
+let map, planeLayer;
+
+// ── Map init ──────────────────────────────────────────────────────────────────
+function initMap() {
+  map = L.map('map', {
+    center: [35, -40], zoom: 3,
+    zoomControl: true, attributionControl: false, worldCopyJump: true,
+  });
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 14 }).addTo(map);
+  planeLayer = L.layerGroup().addTo(map);
+}
+
+// ── Plane icon ────────────────────────────────────────────────────────────────
+function planeIcon(track, altFt) {
+  const size = altFt > 35000 ? 22 : altFt > 20000 ? 19 : 16;
+  const svg  = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24"
+    style="transform:rotate(${track||0}deg);transform-origin:center;
+           filter:drop-shadow(0 0 5px #d4af37)drop-shadow(0 0 2px #000)">
+    <path d="M12 2 L8 10 L2 10 L2 12 L8 12 L7 18 L5 19 L5 21 L12 19 L19 21 L19 19 L17 18 L16 12 L22 12 L22 10 L16 10 Z"
+      fill="#d4af37" stroke="rgba(0,0,0,0.6)" stroke-width="0.8"/>
+  </svg>`;
+  return L.divIcon({ className:'', html:svg, iconSize:[size,size], iconAnchor:[size/2,size/2] });
+}
+
+// ── Render map ────────────────────────────────────────────────────────────────
+function renderMap() {
+  planeLayer.clearLayers();
+  CELEB_LIST.forEach(celeb => {
+    const a = liveData[celeb.hex];
+    if (!a || a.lat == null) return;
+    const altFt    = typeof a.alt_baro === 'number' ? a.alt_baro : 0;
+    const onGround = a.alt_baro === 'ground' || altFt < 100;
+    if (onGround) return;
+
+    const track  = a.track    || 0;
+    const spdKts = a.gs       || 0;
+    const vrate  = a.baro_rate || 0;
+
+    const marker = L.marker([a.lat, a.lon], {
+      icon: planeIcon(track, altFt),
+      zIndexOffset: altFt,
+    });
+
+    marker.bindPopup(`
+      <div class="popup-name">${celeb.icon} ${celeb.name}</div>
+      <div class="popup-row">Aircraft: <span>${celeb.type}</span></div>
+      <div class="popup-row">Reg: <span>${celeb.reg}</span></div>
+      <div class="popup-row">Alt: <span>${altFt.toLocaleString()} ft</span></div>
+      <div class="popup-row">Speed: <span>${Math.round(spdKts)} kts</span></div>
+      <div class="popup-row">Track: <span>${Math.round(track)}°</span></div>
+      ${vrate ? `<div class="popup-row">V/S: <span>${vrate > 0 ? '+' : ''}${Math.round(vrate)} fpm</span></div>` : ''}
+    `, { maxWidth: 210 });
+
+    marker.on('click', () => map.setView([a.lat, a.lon], 7, { animate: true }));
+    planeLayer.addLayer(marker);
+  });
+}
+
+// ── Render sidebar ────────────────────────────────────────────────────────────
+function renderList() {
+  const wrap  = document.getElementById('jet-wrap');
+  const query = document.getElementById('search-input').value.toLowerCase();
+
+  let airborne = 0, visible = 0, maxAlt = 0, maxSpd = 0;
+
+  const entries = CELEB_LIST.map(celeb => {
+    const a        = liveData[celeb.hex];
+    const hasData  = !!a;
+    const altFt    = hasData && typeof a.alt_baro === 'number' ? a.alt_baro : 0;
+    const onGround = !hasData || a.alt_baro === 'ground' || altFt < 100;
+    const spdKts   = hasData ? (a.gs || 0) : 0;
+
+    if (hasData) visible++;
+    if (!onGround) {
+      airborne++;
+      if (altFt > maxAlt) maxAlt = altFt;
+      if (spdKts > maxSpd) maxSpd = spdKts;
+    }
+    return { celeb, a, hasData, altFt, onGround, spdKts };
+  });
+
+  document.getElementById('stat-airborne').textContent = airborne;
+  document.getElementById('stat-tracked').textContent  = CELEB_LIST.length;
+  document.getElementById('stat-visible').textContent  = visible;
+  document.getElementById('stat-maxalt').textContent   = maxAlt ? Math.round(maxAlt/1000)+'K' : '–';
+  document.getElementById('stat-fastest').textContent  = maxSpd ? Math.round(maxSpd) : '–';
+
+  let filtered = entries.filter(({ celeb, onGround }) => {
+    if (activeTab === 'airborne' && onGround)  return false;
+    if (activeTab === 'ground'   && !onGround) return false;
+    if (query && !celeb.name.toLowerCase().includes(query)) return false;
+    return true;
+  });
+
+  // Airborne first, then by altitude
+  filtered.sort((a, b) => {
+    if (!a.onGround && b.onGround) return -1;
+    if (a.onGround && !b.onGround) return 1;
+    return b.altFt - a.altFt;
+  });
+
+  if (!filtered.length) {
+    wrap.innerHTML = `<div class="empty-state">No jets match this filter</div>`;
+    return;
+  }
+
+  wrap.innerHTML = filtered.map(({ celeb, hasData, altFt, onGround, spdKts }) => {
+    const altStr = onGround
+      ? '<span class="badge badge-ground">On Ground</span>'
+      : `<span class="badge badge-air">✈ ${altFt >= 1000 ? (altFt/1000).toFixed(0)+'K' : altFt} ft</span>`;
+
+    const sub = hasData && !onGround
+      ? `${Math.round(spdKts)} kts · ${celeb.type}`
+      : celeb.type;
+
+    const altDisp = onGround
+      ? '<span style="color:var(--muted)">—</span>'
+      : `<span style="color:var(--gold)">${altFt >= 1000 ? (altFt/1000).toFixed(1)+'K' : altFt + "'"}</span>`;
+
+    return `<div class="jet-card ${onGround ? 'grounded' : 'airborne'}" onclick="zoomTo('${celeb.hex}')">
+      <div class="jc-icon">${celeb.icon}</div>
+      <div class="jc-body">
+        <div class="jc-name">${esc(celeb.name)}</div>
+        <div class="jc-sub">${esc(sub)}</div>
+        <div>${altStr}</div>
+      </div>
+      <div class="jc-right">
+        <div class="jc-alt">${altDisp}</div>
+        <div class="jc-reg">${esc(celeb.reg)}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function zoomTo(hex) {
+  const a = liveData[hex];
+  if (!a || a.lat == null) return;
+  const altFt = typeof a.alt_baro === 'number' ? a.alt_baro : 0;
+  if (altFt < 100) return;
+  map.setView([a.lat, a.lon], 7, { animate: true });
+}
+
+function setTab(tab) {
+  activeTab = tab;
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+  renderList();
+}
+
+// ── Fetch from airplanes.live ─────────────────────────────────────────────────
+// /v2/hex endpoint accepts comma-separated ICAO24 hex codes
+async function fetchJets() {
+  // Split into chunks of 30 to avoid URL length limits
+  const chunks = [];
+  for (let i = 0; i < ALL_HEX.length; i += 30)
+    chunks.push(ALL_HEX.slice(i, i + 30));
+
+  const results = await Promise.allSettled(
+    chunks.map(chunk =>
+      fetch(`https://api.airplanes.live/v2/hex/${chunk.join(',')}`)
+        .then(r => r.ok ? r.json() : Promise.reject(r.status))
+        .then(d => d.ac || [])
+    )
+  );
+
+  const ac = [];
+  results.forEach(r => { if (r.status === 'fulfilled') ac.push(...r.value); });
+  return ac;
+}
+
+// ── Main load ─────────────────────────────────────────────────────────────────
+async function loadData() {
+  const btn  = document.getElementById('refresh-btn');
+  const dot  = document.getElementById('status-dot');
+  const stat = document.getElementById('status-text');
+
+  btn.classList.add('spinning');
+  dot.className = 'status-dot';
+  stat.textContent = 'Fetching…';
+
+  try {
+    const aircraft = await fetchJets();
+    liveData = {};
+    aircraft.forEach(a => { if (a.hex) liveData[a.hex.toLowerCase()] = a; });
+
+    renderMap();
+    renderList();
+
+    dot.className = 'status-dot live';
+    stat.textContent = `Updated ${new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}`;
+  } catch(e) {
+    console.error(e);
+    dot.className = 'status-dot';
+    stat.textContent = 'Error — retrying…';
+    setTimeout(loadData, 30000);
+  }
+
+  btn.classList.remove('spinning');
+  btn.textContent = '↻ Refresh';
+}
+
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── Clock ─────────────────────────────────────────────────────────────────────
+function tickClock() {
+  const now = new Date();
+  document.getElementById('clock-time').textContent =
+    now.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  document.getElementById('clock-date').textContent =
+    now.toLocaleDateString([],{weekday:'short',month:'short',day:'numeric'});
+}
+setInterval(tickClock, 1000);
+tickClock();
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+initMap();
+loadData();
+setInterval(loadData, 30 * 1000);
+</script>
+</body>
+</html>
