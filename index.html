@@ -356,52 +356,40 @@ function initMap() {
   planeLayer = L.layerGroup().addTo(map);
 }
 
-// ── Wikipedia photo cache ─────────────────────────────────────────────────────
-// Keyed by celeb.hex → image URL (or null if not found)
-const photoCache = {};
+// ── Photo system — local files in /photos/{hex}.jpg ──────────────────────────
+// Drop any jpg/png/webp named by ICAO hex into a /photos/ folder in your repo.
+// Falls back to the celeb's emoji if the file isn't there.
 
-// Wikipedia REST API: /page/summary/{title} returns a thumbnail URL
-// We derive the article title from the celeb name, handling common edge cases
-function wikiTitle(name) {
-  // Strip parenthetical suffixes like "(2)", "(G5)", "(PC-24)"
-  return name.replace(/\s*\([^)]*\)\s*$/, '').trim().replace(/ /g, '_');
+// Pre-check which photos exist by attempting to load them as Image objects.
+// This avoids broken-img flicker in the DOM.
+const photoExists = {};   // hex → true | false | undefined (unknown)
+
+function preloadPhoto(hex) {
+  return new Promise(resolve => {
+    if (photoExists[hex] !== undefined) { resolve(photoExists[hex]); return; }
+    const img = new Image();
+    img.onload  = () => { photoExists[hex] = true;  resolve(true);  };
+    img.onerror = () => { photoExists[hex] = false; resolve(false); };
+    img.src = `photos/${hex}.jpg`;
+  });
 }
 
-async function fetchPhoto(celeb) {
-  if (photoCache[celeb.hex] !== undefined) return photoCache[celeb.hex];
-  photoCache[celeb.hex] = null; // mark as in-flight
-
-  try {
-    const title = wikiTitle(celeb.name);
-    const url   = `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`;
-    const res   = await fetch(url, { headers: { 'Accept': 'application/json' } });
-    if (!res.ok) { photoCache[celeb.hex] = null; return null; }
-    const data  = await res.json();
-    const thumb = data.thumbnail?.source || data.originalimage?.source || null;
-    // Upscale Wikipedia thumbnails for crisp display
-    const sized = thumb ? thumb.replace(/\/\d+px-/, '/80px-') : null;
-    photoCache[celeb.hex] = sized;
-    return sized;
-  } catch(e) {
-    photoCache[celeb.hex] = null;
-    return null;
-  }
-}
-
-// Pre-fetch photos for all celebs quietly in the background
 async function prefetchPhotos() {
-  // Stagger requests so we don't hammer Wikipedia
-  for (const celeb of CELEB_LIST) {
-    fetchPhoto(celeb);
-    await new Promise(r => setTimeout(r, 80));
-  }
+  // Check all celebs in parallel
+  await Promise.allSettled(CELEB_LIST.map(c => preloadPhoto(c.hex)));
+  renderMap();
+  renderList();
+}
+
+function photoUrl(hex) {
+  return photoExists[hex] ? `photos/${hex}.jpg` : null;
 }
 
 // ── Composite celebrity icon ──────────────────────────────────────────────────
 // Builds a divIcon with: rotating SVG plane above + circular headshot + name label
 function buildCelebIcon(celeb, track, altFt) {
   const planeSize = altFt > 35000 ? 20 : altFt > 20000 ? 17 : 14;
-  const photoUrl  = photoCache[celeb.hex];
+  const photoSrc = photoUrl(celeb.hex);
   const firstName = celeb.name.replace(/\s*\([^)]*\)$/, '').split(' ')[0];
   const altStr    = altFt >= 1000 ? (altFt/1000).toFixed(0)+'K ft' : altFt + ' ft';
 
@@ -412,8 +400,8 @@ function buildCelebIcon(celeb, track, altFt) {
       fill="#d4af37" stroke="rgba(0,0,0,0.6)" stroke-width="0.8"/>
   </svg>`;
 
-  const photoEl = photoUrl
-    ? `<img class="celeb-photo" src="${photoUrl}" alt="${celeb.name}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
+  const photoEl = photoSrc
+    ? `<img class="celeb-photo" src="${photoSrc}" alt="${celeb.name}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
       + `<div class="celeb-photo-fallback" style="display:none">${celeb.icon}</div>`
     : `<div class="celeb-photo-fallback">${celeb.icon}</div>`;
 
@@ -543,9 +531,9 @@ function renderList() {
       ? '<span style="color:var(--muted)">—</span>'
       : `<span style="color:var(--gold)">${altFt >= 1000 ? (altFt/1000).toFixed(1)+'K' : altFt + "'"}</span>`;
 
-    const photoUrl = photoCache[celeb.hex];
-    const avatarEl = photoUrl
-      ? `<img src="${photoUrl}" style="width:32px;height:32px;border-radius:50%;border:1.5px solid var(--gold);object-fit:cover;object-position:top;flex-shrink:0" onerror="this.style.display='none'">`
+    const localPhoto = photoUrl(celeb.hex);
+    const avatarEl = localPhoto
+      ? `<img src="${localPhoto}" style="width:32px;height:32px;border-radius:50%;border:1.5px solid var(--gold);object-fit:cover;object-position:top;flex-shrink:0">`
       : `<div style="width:32px;height:32px;border-radius:50%;border:1.5px solid var(--border);background:rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">${celeb.icon}</div>`;
 
     return `<div class="jet-card ${onGround ? 'grounded' : 'airborne'}" onclick="zoomTo('${celeb.hex}')">
@@ -649,14 +637,8 @@ initMap();
 loadData();
 setInterval(loadData, 30 * 1000);
 
-// Start fetching Wikipedia headshots in the background.
-// Re-render after ~6s when most photos have loaded, and again at ~15s for stragglers.
-prefetchPhotos().then(() => {
-  renderMap();
-  renderList();
-});
-setTimeout(() => { renderMap(); renderList(); }, 6000);
-setTimeout(() => { renderMap(); renderList(); }, 15000);
+// Preload all local photos in parallel, then re-render with headshots
+prefetchPhotos();
 </script>
 </body>
 </html>
