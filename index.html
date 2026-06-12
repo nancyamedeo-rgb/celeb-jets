@@ -382,7 +382,7 @@ async function prefetchPhotos() {
 }
 
 function photoUrl(hex) {
-  return photoExists[hex] ? `photos/${hex}.jpg` : null;
+  return `photos/${hex}.jpg`;
 }
 
 // ── Composite celebrity icon ──────────────────────────────────────────────────
