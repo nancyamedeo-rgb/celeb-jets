@@ -635,7 +635,7 @@ tickClock();
 // ── Boot ──────────────────────────────────────────────────────────────────────
 initMap();
 loadData();
-setInterval(loadData, 30 * 1000);
+setInterval(loadAll, 15 * 60 * 1000);
 
 // Preload all local photos in parallel, then re-render with headshots
 prefetchPhotos();
