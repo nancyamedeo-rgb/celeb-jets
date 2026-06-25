@@ -274,15 +274,19 @@ header h1 span { color: var(--muted); font-weight: 400; }
 // ICAO hex codes from public ADS-B tracking databases (CelebPlanes, CelebrityPrivateJetTracker,
 // ADS-B Exchange public celebrity lists). All transponder data is publicly broadcast.
 const CELEBS = [
-  { hex: 'a2ae0a', name: 'Taylor Swift',        icon: '🎤', type: 'Dassault Falcon 7X',    reg: 'N898TS'  },
+  { hex: 'a370be', name: 'Taylor Swift',        icon: '🎤', type: 'Dassault Falcon 7X',    reg: 'N3200X'  },
   { hex: 'a21fe6', name: 'Drake',                icon: '🎤', type: 'Boeing 767 Air Drake',  reg: 'C-FNOG'  },
   { hex: 'a5bf2c', name: 'Jay-Z',                icon: '🎤', type: 'Bombardier Challenger',  reg: 'N886JZ'  },
   { hex: 'aa3410', name: 'Donald Trump',          icon: '🏛️', type: 'Boeing 757',             reg: 'N757AF'  },
   { hex: 'a89621', name: 'Kim Kardashian',        icon: '⭐', type: 'Gulfstream G650',        reg: 'N1980K'  },
   { hex: 'a18845', name: 'Kim Kardashian (2)',    icon: '⭐', type: 'Gulfstream IV',           reg: 'N1980K'  },
   { hex: 'a6d9e0', name: 'Mark Zuckerberg',      icon: '💻', type: 'Gulfstream G700',         reg: 'N525ZK'  },
-  { hex: 'ac145b', name: 'Elon Musk',             icon: '🚀', type: 'Gulfstream G650ER',      reg: 'N628TS'  },
-  { hex: 'ab2404', name: 'Elon Musk (G5)',        icon: '🚀', type: 'Gulfstream G5',           reg: 'N300BY'  },
+  { hex: 'a835af', name: 'Elon Musk',             icon: '🚀', type: 'Gulfstream G650ER',      reg: 'N628TS'  },
+  { hex: 'abd9B5', name: 'Elon Musk',             icon: '🚀', type: 'Gulfstream G800',        reg: 'N8628'  },
+  { hex: 'a2ae0a', name: 'Elon Musk',             icon: '🚀', type: 'Gulfstream G550',        reg: 'N272BG'  },
+  { hex: 'a64304', name: 'Elon Musk',             icon: '🚀', type: 'Gulfstream G550',        reg: 'N502SX'  },
+  { hex: 'ab2404', name: 'Elon Musk',             icon: '🚀', type: 'Gulfstream G5',          reg: 'N300BY'  },
+  { hex: 'a572b9', name: 'Elon Musk',             icon: '🚀', type: 'Gulfstream G450',        reg: 'N450GG'  },  
   { hex: 'a0f9e7', name: 'Jeff Bezos',            icon: '📦', type: 'Gulfstream G650ER',      reg: 'N272EX'  },
   { hex: 'a17855', name: 'Jeff Bezos (PC-24)',    icon: '📦', type: 'Pilatus PC-24',           reg: 'N194PJ'  },
   { hex: 'a029e0', name: 'Jeff Bezos (PC-24)',    icon: '📦', type: 'Gulfstream G700',         reg: 'N11AF'  },
@@ -292,7 +296,7 @@ const CELEBS = [
   { hex: 'a0046f', name: 'Larry Ellison',          icon: '💻', type: 'Gulfstream G650ER',      reg: 'N787LE'  },
   { hex: 'ab28c5', name: 'Eric Schmidt',           icon: '💻', type: 'Gulfstream G650',        reg: 'N651HS'  },
   { hex: 'a4a848', name: 'Floyd Mayweather',       icon: '🥊', type: 'Gulfstream IV',           reg: 'N909FM'  },
-  { hex: 'a4533a', name: 'Kylie Jenner',           icon: '⭐', type: 'Bombardier Challenger',   reg: 'N810KJ'  },
+  { hex: 'ab0a46', name: 'Kylie Jenner',           icon: '⭐', type: 'Bombardier Challenger',   reg: 'N810KJ'  },  
   { hex: 'a000e8', name: 'Travis Scott',           icon: '🎤', type: 'Dassault Falcon 900',    reg: 'N940TS'  },
   { hex: 'a6503c', name: 'Steven Spielberg',       icon: '🎬', type: 'Gulfstream G650',        reg: 'N831SS'  },
   { hex: 'a7135e', name: 'Kenny Chesney',          icon: '🎤', type: 'Cessna Citation X',      reg: 'N56KC'   },
@@ -319,7 +323,7 @@ const CELEBS = [
   { hex: 'a950c0', name: 'Brad Garlinghouse',      icon: '💻', type: 'Gulfstream IV',           reg: 'N950BG'  },
   { hex: 'a63665', name: 'David Sacks',            icon: '💻', type: 'Gulfstream G550',         reg: 'N663DS'  },
   { hex: 'ac643b', name: 'Howard Lutnick',         icon: '💰', type: 'Gulfstream G700',         reg: 'N643CG'  },
-  { hex: 'a835af', name: 'Lionel Messi',           icon: '⚽', type: 'Gulfstream G550',         reg: 'LV-FYF'  },
+  { hex: 'f50002', name: 'Lionel Messi',           icon: '⚽', type: 'Gulfstream G550',         reg: 'LV-FYF'  },
   { hex: 'a0cf7a', name: 'Aliko Dangote',          icon: '💰', type: 'Bombardier Global 7500',  reg: '5N-ADG'  },
   { hex: 'a1820b', name: 'Kris Jenner',            icon: '⭐', type: 'Bombardier Challenger',   reg: 'N182KJ'  },
   { hex: 'ac39d6', name: 'Tom Brady',              icon: '🏈', type: 'Gulfstream G550',         reg: 'N199PB'  },
@@ -336,10 +340,16 @@ const CELEBS = [
   { hex: '486201', name: 'Bernie Ecclestone',      icon: '🏎️', type: 'Gulfstream G650',         reg: 'G-CIVP'  },
   { hex: 'a988ec', name: 'Jeff Immelt',            icon: '💼', type: 'Gulfstream IV',           reg: 'N988JB'  },
   { hex: 'ad540a', name: 'Andrey Melnichenko',     icon: '💰', type: 'Airbus ACJ319',           reg: 'M-SCHI'  },
-  { hex: 'a370be', name: 'Taylor Swift',           icon: '🎹', type: 'Dassault Falcon 7X',      reg: 'N3200X'  },
-  { hex: 'aa688a', name: 'Tom Cruise',             icon: '⭐', type: 'HondaJet HA-420',         reg: 'N77VA'  }
-];
+  { hex: 'aa688a', name: 'Tom Cruise',             icon: '⭐', type: 'HondaJet HA-420',         reg: 'N77VA'   },
+  { hex: 'a200fc', name: 'Michael Dell',           icon: '💻', type: 'Gulfstream G650ER',       reg: 'N228ZD'  },
+  { hex: 'a7c2d8', name: 'Michael Dell',           icon: '💻', type: 'Gulfstream G700',         reg: 'N6D'     },
+  { hex: 'a02b27', name: 'Paris Hilton',           icon: '⭐', type: 'Gulfstream IV',           reg: 'N11PH'   },
+  { hex: 'ab374c', name: 'Adobe Inc',              icon: '💻', type: 'Gulfstream G650ER         reg: 'N82123'  },
+  { hex: 'a88ebf', name: 'Goldman Sachs',          icon: '💰', type: 'Gulfstream G650ER         reg: 'N650WS'  },
+  { hex: 'ab9345', name: 'Jerry Seinfeld',         icon: '🎤', type: 'Cessna Citation Excel     reg: 'N845JS'  },
+];   
 
+  
 // De-duplicate by hex, build lookup
 const CELEB_MAP = {};
 CELEBS.forEach(c => { if (!CELEB_MAP[c.hex]) CELEB_MAP[c.hex] = c; });
